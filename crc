@@ -1,1 +1,43 @@
 ssh root@10.100.32.163 'for nic in vmnic0 vmnic1 vmnic2 vmnic3; do esxcli network nic stats get -n $nic | grep "CRC Error" | awk -v nic=$nic "{print nic\": \"\$NF}"; done'
+#!/bin/bash
+
+# Configuration
+ESXI_HOST="your-esxi-host-ip"
+ESXI_USER="your-esxi-username"
+NIC="vmnic0"
+EMAIL="your-email@example.com"
+SUBJECT="ESXi CRC Error Alert"
+CRC_FILE="/var/tmp/crc_error_count_$ESXI_HOST.txt"
+LOG_FILE="/var/tmp/crc_check_$ESXI_HOST.log"
+SSH_KEY="/path/to/your/ssh/private/key"
+
+# Function to get the current CRC error count from ESXi
+get_crc_errors() {
+    ssh -i $SSH_KEY $ESXI_USER@$ESXI_HOST "esxcli network nic stats get -n $NIC | grep 'CRC Error' | awk '{print \$NF}'"
+}
+
+# Get the current CRC error count
+current_crc=$(get_crc_errors)
+current_time=$(date "+%Y-%m-%d %H:%M:%S")
+
+# Check if CRC error file exists
+if [ ! -f $CRC_FILE ]; then
+    echo "$current_crc" > $CRC_FILE
+    echo "$current_time - CRC error count initialized to $current_crc" >> $LOG_FILE
+    exit 0
+fi
+
+# Read the previous CRC error count
+previous_crc=$(cat $CRC_FILE)
+
+# Compare current and previous CRC error counts
+if [ "$current_crc" -gt "$previous_crc" ]; then
+    # CRC errors have increased, send an email
+    echo "$current_time - CRC error count increased from $previous_crc to $current_crc" >> $LOG_FILE
+    echo -e "Subject:$SUBJECT\n\nCRC error count on $ESXI_HOST has increased from $previous_crc to $current_crc on NIC $NIC" | sendmail $EMAIL
+else
+    echo "$current_time - CRC error count remains the same: $current_crc" >> $LOG_FILE
+fi
+
+# Update the CRC error file with the current count
+echo "$current_crc" > $CRC_FILE
