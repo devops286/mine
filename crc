@@ -1,0 +1,1 @@
+ssh root@10.100.32.163 'for nic in vmnic0 vmnic1 vmnic2 vmnic3; do esxcli network nic stats get -n $nic | grep "CRC Error" | awk -v nic=$nic "{print nic\": \"\$NF}"; done'
